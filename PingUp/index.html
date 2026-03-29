@@ -28,21 +28,40 @@
       background: white;
       display: flex;
       flex-direction: column;
+      position: relative;
     }
 
     #search-box {
       padding: 10px;
       border-bottom: 1px solid #ccc;
+      display: flex;
+      align-items: center;
     }
 
     #searchInput {
-      width: 65%;
+      width: 60%;
       padding: 5px;
     }
 
     #searchBtn {
       padding: 5px 10px;
       cursor: pointer;
+      margin-left: 5px;
+    }
+
+    #clearSearch {
+      padding: 5px 10px;
+      margin-left: 5px;
+      cursor: pointer;
+      background: #ff4d4d;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      display: none;
+    }
+
+    #clearSearch:hover {
+      background: #cc0000;
     }
 
     #users {
@@ -156,6 +175,53 @@
       cursor: pointer;
       border-radius: 5px;
     }
+
+    #createGroupBtn {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+
+      border: none;
+      background: #25D366;
+      color: white;
+
+      font-size: 28px;
+      font-weight: bold;
+
+      cursor: pointer;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+
+      transition: all 0.2s ease;
+    }
+
+    #createGroupBtn:hover {
+      background: #1ebe5d;
+      transform: scale(1.1);
+    }
+
+    /* GROUP POPUP */
+    #groupPopup {
+      display: none;
+      position: absolute;
+      bottom: 80px;
+      right: 20px;
+      width: 250px;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      padding: 10px;
+      z-index: 100;
+    }
   </style>
 </head>
 
@@ -168,8 +234,37 @@
     <div id="search-box">
       <input type="text" id="searchInput" placeholder="Search by UID" />
       <button id="searchBtn">Search</button>
+      <button id="clearSearch">❌</button>
     </div>
+
     <ul id="users"></ul>
+
+    <button id="createGroupBtn" title="Create Group">+</button>
+
+    <!-- GROUP POPUP -->
+    <div id="groupPopup">
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <b>Create Group</b>
+        <span id="closePopup" style="cursor:pointer; color:red;">❌</span>
+      </div>
+      <input type="text" id="groupName" placeholder="Enter Group name" style=" padding:5px; margin-bottom:10px;"/>
+<div style="display: flex; justify-content:space-between; align-items: center; margin-bottom: 10px;">
+  <input type="text" id="searchInput1" placeholder="Search users" style=" padding:5px; margin-bottom:10px;" />
+<button id="searchBtn1">Search</button>
+
+</div>
+
+      <ul id="result" style="max-height:150px; overflow-y:auto;">
+        <!-- future users list -->
+      </ul>
+
+      <button  style="width:100%; margin-top:10px; padding:5px; background:#25D366; border:none; color:white; border-radius:5px;" onclick="CreateGroup()">
+        Create
+      </button>
+
+    </div>
+
   </div>
 
   <!-- CHAT BOX -->
@@ -209,6 +304,8 @@
 
   let selecteduser = null;
   let username = null;
+  let Cruseruid=null;
+  const clearBtn = document.getElementById("clearSearch");
 
   function selectUser(user) {
     selecteduser = user;
@@ -216,7 +313,6 @@
     socket.emit("load_messages", user);
   }
 
-  // ✅ AFTER LOGIN
   socket.once("me", (data) => {
     username = data.username;
 
@@ -224,12 +320,11 @@
       <div class="me-box">You: ${data.username}</div>
       <div class="me-uid">${data.uid}</div>
     `;
-
-    socket.emit("get_my_chats");
+    Cruseruid=data.uid;
+    socket.emit("get_my_chats",Cruseruid);
   });
 
-  // ✅ LOAD CHAT USERS ONLY
-  socket.on("my_chats", (users) => {
+  socket.on("my_chats", ({users,DBgroups}) => {
     const list = document.getElementById("users");
     list.innerHTML = "";
 
@@ -246,17 +341,38 @@
       li.onclick = () => selectUser(user);
       list.appendChild(li);
     });
+
+    DBgroups.forEach((gr) => {
+      const li = document.createElement("li");
+      li.textContent = gr.groupName;
+      //li.onclick = () => selectUser(user);
+      list.appendChild(li);
+    });
   });
 
-  // ✅ SEARCH BUTTON
   document.getElementById("searchBtn").onclick = () => {
     const uid = document.getElementById("searchInput").value.trim();
     if (!uid) return;
 
     socket.emit("search_user", uid);
+    clearBtn.style.display = "inline-block";
   };
 
-  // ✅ SEARCH RESULT
+  clearBtn.onclick = () => {
+    document.getElementById("searchInput").value = "";
+    clearBtn.style.display = "none";
+    socket.emit("get_my_chats",Cruseruid);
+  };
+  
+  document.getElementById("searchBtn1").onclick = () => {
+    const uid = document.getElementById("searchInput1").value.trim();
+    if (!uid) return;
+
+    socket.emit("search_user1", uid);
+  };
+
+  
+
   socket.on("search_result", (data) => {
     const list = document.getElementById("users");
     list.innerHTML = "";
@@ -270,15 +386,43 @@
 
     const li = document.createElement("li");
     li.innerHTML = `
-      <div class="username">${data.user.username}</div>
-      <div class="uid">${data.user.uid}</div>
+      <div>${data.user.username}</div>
+      <div style="font-size:12px;color:gray;">${data.user.uid}</div>
     `;
 
     li.onclick = () => selectUser(data.user.username);
     list.appendChild(li);
   });
 
-  // ✅ SEND MESSAGE
+  let gusers=[]
+  let gname;
+  socket.on("search_result1", (data) => {
+    const list = document.getElementById("result");
+    list.innerHTML = "";
+
+    if (!data.found) {
+      const li = document.createElement("li");
+      li.textContent = "No user found";
+      list.appendChild(li);
+      return;
+    }
+
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <div>${data.user.username}</div>
+      <div style="font-size:12px;color:gray;">${data.user.uid}</div>
+    `;
+    li.onclick = () => {
+        if (!gusers.includes(data.user.uid)) { 
+            gusers.push(data.user.uid);
+        }
+        console.log(gusers);
+    };
+    //console.log(gusers)
+    list.appendChild(li);
+  });
+
+
   document.getElementById("sendBtn").onclick = () => {
     const msg = document.getElementById("messageInput").value;
 
@@ -297,7 +441,6 @@
     document.getElementById("messageInput").value = "";
   };
 
-  // ✅ ADD MESSAGE
   function addMessage(data, isMe, time) {
     const ul = document.getElementById("history");
 
@@ -319,7 +462,6 @@
     ul.scrollTop = ul.scrollHeight;
   }
 
-  // ✅ RECEIVE MESSAGE
   socket.on("receive_message", (data) => {
     const isMe = data.from === username;
     const time = new Date().toLocaleTimeString();
@@ -327,7 +469,6 @@
     addMessage(data, isMe, time);
   });
 
-  // ✅ CHAT HISTORY
   socket.on("chat_history", (messages) => {
     const ul = document.getElementById("history");
     ul.innerHTML = "";
@@ -339,6 +480,30 @@
       addMessage(msg, isMe, time);
     });
   });
+
+  // POPUP LOGIC (ONLY ADDITION)
+  const popup = document.getElementById("groupPopup");
+  const openBtn = document.getElementById("createGroupBtn");
+  const closeBtn = document.getElementById("closePopup");
+
+  openBtn.onclick = () => {
+    popup.style.display = "block";
+  };
+
+  closeBtn.onclick = () => {
+    popup.style.display = "none";
+    gusers=[]
+  };
+
+  function CreateGroup(){
+ if(gusers.length>=2) {const grname = document.getElementById("groupName").value.trim();
+
+    socket.emit("Cgroup", {
+  groupName: grname,
+  members: gusers,
+  createdBy: Cruseruid
+});}
+  }
 </script>
 
 </body>

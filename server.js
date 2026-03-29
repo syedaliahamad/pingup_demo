@@ -3,11 +3,12 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const mongoose = require("mongoose");
-
+const Group = require("./models/groups.js");
 const Message = require("./models/message.js");
 const authRoutes = require("./routes/auth");
 const verifyToken = require("./middleware/auth.js");
 const User = require("./models/users.js");
+const groups = require("./models/groups.js");
 
 const app = express();
 app.use(cors());
@@ -63,7 +64,7 @@ io.on("connection", async (socket) => {
   });
 
   // ================= GET MY CHATS =================
-  socket.on("get_my_chats", async () => {
+  socket.on("get_my_chats", async (uid) => {
     try {
       const messages = await Message.find({
         $or: [
@@ -81,8 +82,13 @@ io.on("connection", async (socket) => {
           chatUsers.add(msg.from);
         }
       });
-
-      socket.emit("my_chats", Array.from(chatUsers));
+      // console.log(uid);
+      const Ygroup = await Group.find({
+  members: uid
+});
+      
+      socket.emit("my_chats", {users: Array.from(chatUsers),
+  DBgroups: Ygroup});
     } catch (err) {
       console.log(err);
     }
@@ -107,6 +113,27 @@ io.on("connection", async (socket) => {
     } catch (err) {
       console.log(err);
       socket.emit("search_result", { found: false });
+    }
+  });
+
+  socket.on("search_user1", async (uid) => {
+    try {
+      const foundUser = await User.findOne({ uid });
+
+      if (!foundUser) {
+        socket.emit("search_result1", { found: false });
+      } else {
+        socket.emit("search_result1", {
+          found: true,
+          user: {
+            username: foundUser.username,
+            uid: foundUser.uid,
+          },
+        });
+      }
+    } catch (err) {
+      console.log(err);
+      socket.emit("search_result1", { found: false });
     }
   });
 
@@ -167,6 +194,22 @@ io.on("connection", async (socket) => {
   function getRoom(user1, user2) {
     return [user1, user2].sort().join("_");
   }
+
+
+  socket.on("Cgroup",async (data)=>{
+    try {
+      
+      await Group.create({
+    groupName: data.groupName,
+    members: data.members,
+    createdBy: data.createdBy
+  });
+
+    } catch (err) {
+      console.log(err);
+    }
+  })
+
 });
 
 // ================= DB CONNECTION =================
