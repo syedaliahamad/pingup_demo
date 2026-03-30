@@ -9,7 +9,7 @@ const authRoutes = require("./routes/auth");
 const verifyToken = require("./middleware/auth.js");
 const User = require("./models/users.js");
 const groups = require("./models/groups.js");
-
+const Gmessage=require("./models/groupMessage.js")
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -161,6 +161,31 @@ io.on("connection", async (socket) => {
       console.log(err);
     }
   });
+    // ================= Group MESSAGE =================
+socket.on("Gr_message",async({gr,message})=>{
+  const Gname=gr.groupName;
+  const from=socket.username;
+  const Gid=gr._id.toString();
+  //console.log(guid)
+socket.join(Gid)
+try{
+  await Gmessage.create({
+    from,
+    Gname,
+    Gid,
+    message,
+    time: new Date(),
+  });
+  io.to(Gid).emit("receive_message",{
+    from,
+    message,
+  })
+
+} 
+catch(err){
+  console.log(err);
+} 
+})
 
   // ================= LOAD MESSAGES =================
   socket.on("load_messages", async (otherUser) => {
@@ -177,6 +202,23 @@ io.on("connection", async (socket) => {
         ],
       }).sort({ time: 1 });
 
+      socket.emit("chat_history", messages);
+    } catch (err) {
+      console.log(err);
+    }
+  });
+  // ================= LOAD GmESSAGES =================
+  socket.on("load_Gmessages", async (gr) => {
+    const myName = socket.username;
+    const room = gr._id.toString();
+    const grid=gr._id;
+    socket.join(room);
+
+    try {
+      const messages = await Gmessage.find({
+         Gid:room,
+      }).sort({ time: 1 });
+      console.log(messages)
       socket.emit("chat_history", messages);
     } catch (err) {
       console.log(err);

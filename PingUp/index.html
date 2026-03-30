@@ -302,15 +302,27 @@
     auth: { token }
   });
 
+
+  let type="private";
   let selecteduser = null;
+  let selectedgroup=null;
   let username = null;
   let Cruseruid=null;
+  let crgr=null;
   const clearBtn = document.getElementById("clearSearch");
 
   function selectUser(user) {
+    type="private";
     selecteduser = user;
     document.getElementById("history").innerHTML = "";
     socket.emit("load_messages", user);
+  }
+
+  function selectGroup(gr){
+    selectedgroup=gr.groupName;
+    type="group";
+    crgr=gr;
+    socket.emit("load_Gmessages",gr);
   }
 
   socket.once("me", (data) => {
@@ -345,7 +357,7 @@
     DBgroups.forEach((gr) => {
       const li = document.createElement("li");
       li.textContent = gr.groupName;
-      //li.onclick = () => selectUser(user);
+      li.onclick = () => selectGroup(gr);
       list.appendChild(li);
     });
   });
@@ -426,17 +438,23 @@
   document.getElementById("sendBtn").onclick = () => {
     const msg = document.getElementById("messageInput").value;
 
-    if (!selecteduser) {
-      alert("Select a user first");
+    if (!selecteduser && !selectedgroup) {
+      alert("Select an entity first");
       return;
     }
 
     if (!msg.trim()) return;
 
+    if(type==="private")
     socket.emit("private_message", {
       to: selecteduser,
       message: msg,
     });
+    else
+    socket.emit("Gr_message",{
+  gr:crgr,
+  message:msg,
+    })
 
     document.getElementById("messageInput").value = "";
   };
